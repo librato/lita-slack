@@ -1,8 +1,8 @@
-require 'eventmachine'
 require 'faye/websocket'
 require 'multi_json'
 
 require 'lita/adapters/slack/api'
+require 'lita/adapters/slack/event_loop'
 require 'lita/adapters/slack/im_mapping'
 require 'lita/adapters/slack/message_handler'
 require 'lita/adapters/slack/user_creator'
@@ -34,7 +34,7 @@ module Lita
         end
 
         def run(queue = nil, options = {})
-          EM.run do
+          EventLoop.run do
             log.debug("Connecting to the Slack Real Time Messaging API.")
             @websocket = Faye::WebSocket::Client.new(
               websocket_url,
@@ -56,7 +56,7 @@ module Lita
 
         def send_messages(channel, strings)
           strings.each do |string|
-            websocket.send(safe_payload_for(channel, string))
+            EventLoop.defer { websocket.send(safe_payload_for(channel, string)) }
           end
         end
 
@@ -66,7 +66,7 @@ module Lita
             websocket.close
           end
 
-          EM.stop if EM.reactor_running?
+          EventLoop.safe_stop
         end
 
         private
@@ -94,7 +94,7 @@ module Lita
         def receive_message(event)
           data = MultiJson.load(event.data)
 
-          MessageHandler.new(robot, robot_id, data).handle
+          EventLoop.defer { MessageHandler.new(robot, robot_id, data).handle }
         end
 
         def safe_payload_for(channel, string)

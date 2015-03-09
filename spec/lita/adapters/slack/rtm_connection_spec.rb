@@ -67,11 +67,8 @@ describe Lita::Adapters::Slack::RTMConnection, lita: true do
   end
 
   describe "#run" do
-    it "starts the reactor" do
-      with_websocket(subject, queue) do |websocket|
-        expect(EM.reactor_running?).to be_truthy
-      end
-    end
+    let(:event) { double('Event', data: '{}') }
+    let(:message_handler) { instance_double('Lita::Adapters::Slack::MessageHandler') }
 
     it "creates the WebSocket" do
       with_websocket(subject, queue) do |websocket|
@@ -91,14 +88,20 @@ describe Lita::Adapters::Slack::RTMConnection, lita: true do
       end
     end
 
-    context "when the WebSocket is closed" do
-      it "shuts down the reactor" do
-        with_websocket(subject, queue) do |websocket|
-          websocket.close
+    it "dispatches incoming data to MessageHandler" do
+      allow(Lita::Adapters::Slack::EventLoop).to receive(:defer).and_yield
+      allow(Lita::Adapters::Slack::MessageHandler).to receive(:new).with(
+        robot,
+        'U12345678',
+        {}
+      ).and_return(message_handler)
 
-          expect(EM.reactor_running?).to be_falsy
-        end
-      end
+      expect(message_handler).to receive(:handle)
+
+      # Testing private methods directly is bad, but it's difficult to get
+      # the timing right when testing it by emitting the "message" event on
+      # the WebSocket.
+      subject.send(:receive_message, event)
     end
   end
 
@@ -112,6 +115,7 @@ describe Lita::Adapters::Slack::RTMConnection, lita: true do
       allow(Faye::WebSocket::Client).to receive(:new).and_return(websocket)
       allow(websocket).to receive(:on)
       allow(websocket).to receive(:close)
+      allow(Lita::Adapters::Slack::EventLoop).to receive(:defer).and_yield
     end
 
     it "writes messages to the WebSocket" do
