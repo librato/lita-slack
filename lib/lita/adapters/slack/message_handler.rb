@@ -34,7 +34,15 @@ module Lita
         attr_reader :type
 
         def body
-          data["text"].to_s.sub(/^\s*<@#{robot_id}>/, "@#{robot.mention_name}")
+          normalized_message = if data["text"]
+            data["text"].sub(/^\s*<@#{robot_id}>/, "@#{robot.mention_name}")
+          end
+
+          attachment_text = Array(data["attachments"]).map do |attachment|
+            attachment["text"]
+          end
+
+          ([normalized_message] + attachment_text).compact.join("\n")
         end
 
         def channel
